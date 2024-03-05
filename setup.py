@@ -27,6 +27,6 @@ setuptools.setup(
         "mini_api": [],
     },
     entry_points={
-        #"console_scripts": ["sometool=.cli:cli"],
+        # "console_scripts": ["sometool=.cli:cli"],
     },
 )
