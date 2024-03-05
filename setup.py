@@ -1,9 +1,13 @@
+import pathlib
+
 import setuptools
 
-with open("README.md", "r") as fh:
+ROOT = pathlib.Path(__file__).parent.resolve()
+
+with open(ROOT / "README.md", "r") as fh:
     long_description = fh.read()
 
-with open("requirements.txt") as fr:
+with open(ROOT / "requirements.txt") as fr:
     reqs = fr.read().strip().split("\n")
 
 
