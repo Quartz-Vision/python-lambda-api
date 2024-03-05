@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from mini_api.core import MiniAPI
+from lambda_api.core import LambdaAPI
 
 
 class ExampleSchema(BaseModel):
@@ -11,7 +11,7 @@ class ExampleResponse(BaseModel):
     message: str
 
 
-app = MiniAPI(prefix="/api", schema_id="example")
+app = LambdaAPI(prefix="/api", schema_id="example")
 
 
 @app.get("/example", status=200)

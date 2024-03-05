@@ -12,8 +12,8 @@ with open(ROOT / "requirements.txt") as fr:
 
 
 setuptools.setup(
-    name="mini-api",
-    version="0.0.1",
+    name="lambda-api",
+    version="0.1.1",
     author="liava",
     author_email="liava@tuta.io",
     description="Minimal Web API for lambdas",
@@ -28,7 +28,7 @@ setuptools.setup(
     python_requires=">=3.12",
     install_requires=reqs,
     package_data={
-        "mini_api": [],
+        "lambda_api": [],
     },
     entry_points={
         # "console_scripts": ["sometool=.cli:cli"],

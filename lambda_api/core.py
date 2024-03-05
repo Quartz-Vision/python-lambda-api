@@ -6,8 +6,8 @@ from typing import Any, Callable, NamedTuple, NotRequired, Type, TypedDict, Unpa
 
 from pydantic import BaseModel, RootModel, ValidationError
 
-from mini_api.error import APIError
-from mini_api.schema import Request
+from lambda_api.error import APIError
+from lambda_api.schema import Request
 
 
 class Response(NamedTuple):
@@ -41,7 +41,7 @@ class RouteParams(TypedDict):
     status: NotRequired[int]
 
 
-class MiniAPI:
+class LambdaAPI:
     def __init__(self, prefix="", schema_id: str | None = None):
         self.route_table: dict[tuple[str, str], Callable] = {}
         self.prefix = prefix

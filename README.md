@@ -1,6 +1,10 @@
-# mini-api
+# lambda-api
 
 Minimal Web API for lambdas
+
+## Installation
+
+`pip install lambda-api`
 
 ## Requirements:
 
