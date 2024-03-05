@@ -13,13 +13,13 @@ with open(ROOT / "requirements.txt") as fr:
 
 setuptools.setup(
     name="lambda-api",
-    version="0.1.1",
+    version="0.1.2",
     author="liava",
     author_email="liava@tuta.io",
     description="Minimal Web API for lambdas",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Quartz-Vision/python-mini-api",
+    url="https://github.com/Quartz-Vision/python-lambda-api",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3.12",
