@@ -41,6 +41,18 @@ async def main():
 
     print("EXAMPLE 2")
     print(
+        "OPTIONS /example2?name=World:\n",
+        await app.aws_lambda_handler(
+            {
+                "httpMethod": "OPTIONS",
+                "pathParameters": {"proxy": "/example2"},
+                "queryStringParameters": {"name": "World"},
+            },
+            None,
+        ),
+    )
+    print(
+        "GET /example2?name=World:\n",
         await app.aws_lambda_handler(
             {
                 "httpMethod": "GET",
@@ -48,7 +60,7 @@ async def main():
                 "queryStringParameters": {"name": "World"},
             },
             None,
-        )
+        ),
     )
 
 

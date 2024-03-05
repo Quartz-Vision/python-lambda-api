@@ -7,7 +7,7 @@ from typing import Any, Callable, NamedTuple, NotRequired, Type, TypedDict, Unpa
 from pydantic import BaseModel, RootModel, ValidationError
 
 from lambda_api.error import APIError
-from lambda_api.schema import Request
+from lambda_api.schema import Method, Request
 
 
 class Response(NamedTuple):
@@ -17,6 +17,7 @@ class Response(NamedTuple):
 
     status: int
     body: Any
+    headers: dict[str, str] = {}
 
 
 @dataclass(slots=True)
@@ -41,15 +42,44 @@ class RouteParams(TypedDict):
     status: NotRequired[int]
 
 
+@dataclass(slots=True)
+class CORSConfig:
+    allow_origins: list[str]
+    allow_methods: list[str]
+    allow_headers: list[str]
+    max_age: int = 3000
+
+
 class LambdaAPI:
-    def __init__(self, prefix="", schema_id: str | None = None):
-        self.route_table: dict[tuple[str, str], Callable] = {}
+    def __init__(
+        self, prefix="", schema_id: str | None = None, cors: CORSConfig | None = None
+    ):
+        self.route_table: dict[str, dict[str, Callable]] = {}
         self.prefix = prefix
         self.schema_id = schema_id
+        self.cors_config = cors
+        self.cors_headers = {}
+
+        self.bake_cors_headers()
+
+    def bake_cors_headers(self):
+        if self.cors_config:
+            self.cors_headers = {
+                "Access-Control-Allow-Origin": ",".join(self.cors_config.allow_origins),
+                "Access-Control-Allow-Methods": ",".join(
+                    self.cors_config.allow_methods
+                ),
+                "Access-Control-Allow-Headers": ",".join(
+                    self.cors_config.allow_headers
+                ),
+                "Access-Control-Max-Age": str(self.cors_config.max_age),
+            }
 
     def get_decorator(self, method, path, **kwargs: Unpack[RouteParams]):
         def decorator(func):
-            self.route_table[method, path] = func
+            endpoint = self.route_table[path] = self.route_table.get(path, {})
+            endpoint[method] = func
+
             func_signature = signature(func)
             params = func_signature.parameters
             return_type = func_signature.return_annotation
@@ -78,19 +108,19 @@ class LambdaAPI:
         return decorator
 
     def post(self, path, **kwargs: Unpack[RouteParams]):
-        return self.get_decorator("POST", path, **kwargs)
+        return self.get_decorator(Method.POST, path, **kwargs)
 
     def get(self, path, **kwargs: Unpack[RouteParams]):
-        return self.get_decorator("GET", path, **kwargs)
+        return self.get_decorator(Method.GET, path, **kwargs)
 
     def put(self, path, **kwargs: Unpack[RouteParams]):
-        return self.get_decorator("PUT", path, **kwargs)
+        return self.get_decorator(Method.PUT, path, **kwargs)
 
     def delete(self, path, **kwargs: Unpack[RouteParams]):
-        return self.get_decorator("DELETE", path, **kwargs)
+        return self.get_decorator(Method.DELETE, path, **kwargs)
 
     def patch(self, path, **kwargs: Unpack[RouteParams]):
-        return self.get_decorator("PATCH", path, **kwargs)
+        return self.get_decorator(Method.PATCH, path, **kwargs)
 
     def aws_get_request(self, event: dict[str, Any]) -> dict[str, Any]:
         path = "/" + event.get("pathParameters", {}).get("proxy", "").strip("/")
@@ -121,11 +151,26 @@ class LambdaAPI:
     async def aws_lambda_handler(self, event: dict[str, Any], context: Any = None):
         try:
             request = self.aws_get_request(event)
-            func = self.route_table.get((request["method"], request["path"]))
 
-            if func is None:
-                response = Response(status=404, body={"error": "Not Found"})
+            endpoint = self.route_table.get(request["path"])
+            method = request["method"]
+            func = None
+
+            if endpoint:
+                if method == Method.OPTIONS:
+                    response = Response(
+                        status=200, body=None, headers=self.cors_headers
+                    )
+                else:
+                    func = endpoint.get(method)
+                    if not func:
+                        response = Response(
+                            status=405, body={"error": "Method Not Allowed"}
+                        )
             else:
+                response = Response(status=404, body={"error": "Not Found"})
+
+            if func:
                 template: InvokeTemplate = func.__invoke_template__  # type: ignore
                 args = {}
 
@@ -160,109 +205,110 @@ class LambdaAPI:
             response = Response(status=400, body={"error": e.errors()})
         except Exception as e:
             response = Response(status=500, body={"error": str(e)})
-            print(e)
 
         return {
             "statusCode": response.status,
             "body": json.dumps(response.body),
             "headers": {
                 "Content-Type": "application/json",
+                **response.headers,
             },
         }
 
     def get_schema(self):
-        components = {}
         schema = {
             "paths": defaultdict(lambda: defaultdict(dict)),
-            "components": {"schemas": components},
+            "components": {"schemas": {}},
         }
 
         if self.schema_id:
             schema["id"] = self.schema_id
 
-        # Global definitions dict. They will be extracted later from the routes' schemas
-        # This dict represents components.schemas of OpenAPI spec
-        defs = {}
+        for path, endpoint in self.route_table.items():
+            for method, func in endpoint.items():
+                self.add_endpoint_to_schema(schema, path, method, func)
 
-        for (method, path), func in self.route_table.items():
-            template: InvokeTemplate = func.__invoke_template__  # type: ignore
-            full_path = self.prefix + path
-            func_schema = schema["paths"][full_path][method.lower()]
+        txt_schema = json.dumps(schema).replace("$defs", "components/schemas")
+        return json.loads(txt_schema)
 
-            if func.__doc__:
-                func_schema["summary"] = func.__doc__
+    def add_endpoint_to_schema(
+        self, schema: dict[str, Any], path: str, method: str, func: Callable
+    ):
+        components = schema["components"]["schemas"]
 
-            if template.request:
-                # Handle headers
-                headers = template.request.model_fields[
-                    "headers"
-                ].annotation.model_json_schema()
-                required_keys = headers.get("required", [])
+        template: InvokeTemplate = func.__invoke_template__  # type: ignore
+        full_path = self.prefix + path
+        func_schema = schema["paths"][full_path][method.lower()]
 
-                func_schema["parameters"] = func_schema.get("parameters", []) + [
-                    {
-                        "in": "header",
-                        "name": k.replace("_", "-").title(),
-                        "schema": v,
+        if func.__doc__:
+            func_schema["summary"] = func.__doc__
+
+        if template.request:
+            # Handle headers
+            headers = (
+                template.request.model_fields["headers"].annotation
+            ).model_json_schema()
+            required_keys = headers.get("required", [])
+
+            func_schema["parameters"] = func_schema.get("parameters", []) + [
+                {
+                    "in": "header",
+                    "name": k.replace("_", "-").title(),
+                    "schema": v,
+                }
+                | ({"required": True} if k in required_keys else {})
+                for k, v in headers["properties"].items()
+            ]
+
+            # Handle the request config
+            config = template.request.request_config
+            if config:
+                if auth_name := config.get("auth_name"):
+                    func_schema["security"] = [{auth_name: []}]
+
+        # Handle QUERY parameters
+        if template.params:
+            params = template.params.model_json_schema()
+            required_keys = params.get("required", [])
+
+            components.update(params.pop("$defs", {}))
+
+            func_schema["parameters"] = func_schema.get("parameters", []) + [
+                {"in": "query", "name": k, "schema": v}
+                | ({"required": True} if k in required_keys else {})
+                for k, v in params["properties"].items()
+            ]
+
+        # Handle BODY parameters
+        if template.body:
+            body = template.body.model_json_schema()
+            comp_title = body["title"]
+
+            components[comp_title] = body
+            components.update(body.pop("$defs", {}))
+
+            func_schema["requestBody"] = {
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": f"#/components/schemas/{comp_title}"}
                     }
-                    | ({"required": True} if k in required_keys else {})
-                    for k, v in headers["properties"].items()
-                ]
+                }
+            }
 
-                # Handle the request config
-                config = template.request.request_config
-                if config:
-                    if auth_name := config.get("auth_name"):
-                        func_schema["security"] = [{auth_name: []}]
+        # Handle response schema
+        if template.response:
+            response = template.response.model_json_schema()
+            comp_title = response["title"]
 
-            # Handle QUERY parameters
-            if template.params:
-                params = template.params.model_json_schema()
-                required_keys = params.get("required", [])
+            components[comp_title] = response
+            components.update(response.pop("$defs", {}))
 
-                defs.update(params.pop("$defs", {}))
-
-                func_schema["parameters"] = func_schema.get("parameters", []) + [
-                    {"in": "query", "name": k, "schema": v}
-                    | ({"required": True} if k in required_keys else {})
-                    for k, v in params["properties"].items()
-                ]
-
-            # Handle BODY parameters
-            if template.body:
-                body = template.body.model_json_schema()
-                comp_title = body["title"]
-                components[comp_title] = body
-
-                defs.update(body.pop("$defs", {}))
-
-                func_schema["requestBody"] = {
+            func_schema["responses"] = {
+                str(template.status): {
                     "content": {
                         "application/json": {
                             "schema": {"$ref": f"#/components/schemas/{comp_title}"}
                         }
                     }
                 }
-
-            # Handle response schema
-            if template.response:
-                response = template.response.model_json_schema()
-                comp_title = response["title"]
-                components[comp_title] = response
-
-                defs.update(response.pop("$defs", {}))
-
-                func_schema["responses"] = {
-                    str(template.status): {
-                        "content": {
-                            "application/json": {
-                                "schema": {"$ref": f"#/components/schemas/{comp_title}"}
-                            }
-                        }
-                    }
-                }
-
-        components.update(defs)
-
-        txt_schema = json.dumps(schema).replace("$defs", "components/schemas")
-        return json.loads(txt_schema)
+            }
