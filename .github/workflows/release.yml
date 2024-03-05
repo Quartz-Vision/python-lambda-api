@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  validation:
+    uses: ./.github/workflows/validation.yml
+    secrets: inherit
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [validation]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Read version
+        run: |
+          echo "PKG_VERSION=$(sed -n 's/.*version="\(.*\)",.*/\1/p' setup.py)" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ env.PKG_VERSION }}
+          tag: ${{ env.PKG_VERSION }}
+          commit: "main"
+          draft: false

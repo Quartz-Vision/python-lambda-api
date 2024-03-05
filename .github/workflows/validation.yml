@@ -1,0 +1,54 @@
+name: Run linters and tests
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup python
+        id: setup-python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Use venv cache
+        id: cache-venv
+        uses: actions/cache@v3
+        with:
+          path: ./.venv/
+          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-venv-${{ hashFiles('**/requirements*.txt') }}
+
+      - name: Initialize venv
+        env:
+          GITHUB_USERNAME: ${{ secrets.ORG_GITHUB_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN }}
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: python -m venv ./.venv && . ./.venv/bin/activate &&
+             pip install -r requirements.txt &&
+             pip install -r requirements.tools.txt
+
+      - name: Isort
+        run: |
+          . .venv/bin/activate
+          python -m isort --profile=black --float-to-top --check-only .
+
+      - name: Black
+        run: |
+          . .venv/bin/activate
+          python -m black --check .
+
+      - name: Flake8
+        run: |
+          . .venv/bin/activate
+          python -m flake8 .
