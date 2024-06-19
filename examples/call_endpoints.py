@@ -2,6 +2,7 @@ import asyncio
 
 from pydantic import BaseModel
 
+from lambda_api.adapters import AWSAdapter
 from lambda_api.core import LambdaAPI
 
 
@@ -26,10 +27,13 @@ async def get_example2(params: ExampleSchema) -> ExampleResponse:
     return ExampleResponse(message="Hello, " + params.name)
 
 
+lambda_adapter = AWSAdapter(app)
+
+
 async def main():
     print("EXAMPLE 1")
     print(
-        await app.aws_lambda_handler(
+        await lambda_adapter.lambda_handler(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example"},
@@ -42,7 +46,7 @@ async def main():
     print("EXAMPLE 2")
     print(
         "OPTIONS /example2?name=World:\n",
-        await app.aws_lambda_handler(
+        await lambda_adapter.lambda_handler(
             {
                 "httpMethod": "OPTIONS",
                 "pathParameters": {"proxy": "/example2"},
@@ -53,7 +57,7 @@ async def main():
     )
     print(
         "GET /example2?name=World:\n",
-        await app.aws_lambda_handler(
+        await lambda_adapter.lambda_handler(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example2"},
