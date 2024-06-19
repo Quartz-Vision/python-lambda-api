@@ -13,7 +13,7 @@ with open(ROOT / "requirements.txt") as fr:
 
 setuptools.setup(
     name="lambda-api",
-    version="0.2.2",
+    version="1.0.0",
     author="liava",
     author_email="liava@tuta.io",
     description="Minimal Web API for lambdas",
