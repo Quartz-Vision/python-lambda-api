@@ -28,6 +28,7 @@ class InvokeTemplate:
     request: Type[Request] | None
     response: Type[BaseModel] | None
     status: int
+    tags: list[str]
 
     # means that we have a simple type like dict/int/str etc
     user_root_response: bool
@@ -39,6 +40,7 @@ class RouteParams(TypedDict):
     """
 
     status: NotRequired[int]
+    tags: NotRequired[list[str] | None]
 
 
 @dataclass(slots=True)
@@ -51,7 +53,11 @@ class CORSConfig:
 
 class LambdaAPI:
     def __init__(
-        self, prefix="", schema_id: str | None = None, cors: CORSConfig | None = None
+        self,
+        prefix="",
+        schema_id: str | None = None,
+        cors: CORSConfig | None = None,
+        tags: list[str] | None = None,
     ):
         # dict[path, dict[method, function]]
         self.route_table: dict[str, dict[str, Callable]] = {}
@@ -60,6 +66,7 @@ class LambdaAPI:
         self.schema_id = schema_id
         self.cors_config = cors
         self.cors_headers = {}
+        self.default_tags = tags or []
 
         self.bake_cors_headers()
 
@@ -102,6 +109,7 @@ class LambdaAPI:
                 response=return_type,
                 user_root_response=user_root_response,
                 status=kwargs.get("status", 200),
+                tags=kwargs.get("tags", self.default_tags) or [],
             )
 
             return func

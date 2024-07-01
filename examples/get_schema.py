@@ -14,7 +14,7 @@ class ExampleResponse(BaseModel):
     message: str
 
 
-app = LambdaAPI(prefix="/api", schema_id="example")
+app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
 
 
 @app.get("/example", status=200)
@@ -22,7 +22,7 @@ async def get_example(params: ExampleSchema) -> str:
     return "Hello, " + params.name
 
 
-@app.get("/example2", status=200)
+@app.get("/example2", status=200, tags=None)
 async def get_example2(params: ExampleSchema) -> ExampleResponse:
     """
     Some test description
