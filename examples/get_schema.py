@@ -30,5 +30,10 @@ async def get_example2(params: ExampleSchema) -> ExampleResponse:
     return ExampleResponse(message="Hello, " + params.name)
 
 
+@app.get("/example3", status=200, tags=None)
+async def get_example3(params: ExampleSchema):
+    pass
+
+
 schema_gen = OpenApiGenerator(app)
 print(json.dumps(schema_gen.get_schema(), indent=4, sort_keys=True))

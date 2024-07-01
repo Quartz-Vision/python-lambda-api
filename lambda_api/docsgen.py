@@ -109,6 +109,10 @@ class OpenApiGenerator:
                     }
                 }
             }
+        else:
+            func_schema["responses"] = {
+                str(template.status): {"description": "No response body"}
+            }
 
         # Handle tags
         if template.tags:
