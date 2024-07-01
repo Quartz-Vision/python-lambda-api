@@ -109,7 +109,7 @@ class OpenApiGenerator:
                     }
                 }
             }
-        
+
         # Handle tags
         if template.tags:
             func_schema["tags"] = template.tags
