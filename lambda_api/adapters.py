@@ -41,10 +41,10 @@ class AWSAdapter:
             "provider_data": event,
         }
 
-    def make_response(self, response: Response):
+    def make_response(self, response: Response, dump: bool = True):
         return {
             "statusCode": response.status,
-            "body": json.dumps(response.body),
+            "body": json.dumps(response.body) if dump else response.body,
             "headers": {
                 "Content-Type": "application/json",
                 **response.headers,
@@ -77,7 +77,10 @@ class AWSAdapter:
         except APIError as e:
             response = Response(status=e.status, body={"error": str(e)})
         except ValidationError as e:
-            response = Response(status=400, body={"error": e.json()})
+            return self.make_response(
+                Response(status=400, body=f'{{"error": {e.json()}}}'),
+                dump=False,
+            )
         except Exception as e:
             response = Response(status=500, body={"error": str(e)})
 
