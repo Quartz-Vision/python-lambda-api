@@ -94,7 +94,7 @@ class OpenApiGenerator:
 
         # Handle response schema
         if template.response:
-            response = template.response.model_json_schema()
+            response = template.response.model_json_schema(mode="serialization")
             comp_title = response["title"]
 
             components[comp_title] = response
