@@ -1,9 +1,9 @@
 import inspect
-import json
 from collections import defaultdict
 from typing import Any, Callable
 
 from lambda_api.core import InvokeTemplate, LambdaAPI
+from lambda_api.utils import json_dumps, json_loads
 
 
 class OpenApiGenerator:
@@ -25,8 +25,8 @@ class OpenApiGenerator:
             for method, func in endpoint.items():
                 self._add_endpoint_to_schema(schema, path, method, func)
 
-        txt_schema = json.dumps(schema).replace("$defs", "components/schemas")
-        return json.loads(txt_schema)
+        txt_schema = json_dumps(schema).replace("$defs", "components/schemas")
+        return json_loads(txt_schema)
 
     def _add_endpoint_to_schema(
         self, schema: dict[str, Any], path: str, method: str, func: Callable
@@ -58,9 +58,8 @@ class OpenApiGenerator:
             ]
 
             # Handle the request config
-            config = template.request.request_config
-            if config:
-                if auth_name := config.get("auth_name"):
+            if config := template.request.request_config:
+                if auth_name := config.auth_name:
                     func_schema["security"] = [{auth_name: []}]
 
         # Handle QUERY parameters

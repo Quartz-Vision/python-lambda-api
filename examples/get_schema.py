@@ -1,9 +1,9 @@
-import json
-
 from pydantic import BaseModel
 
 from lambda_api.core import LambdaAPI
 from lambda_api.docsgen import OpenApiGenerator
+from lambda_api.schema import BearerAuthRequest
+from lambda_api.utils import json_dumps
 
 
 class ExampleSchema(BaseModel):
@@ -23,7 +23,9 @@ async def get_example(params: ExampleSchema) -> str:
 
 
 @app.get("/example2", status=200, tags=None)
-async def get_example2(params: ExampleSchema) -> ExampleResponse:
+async def get_example2(
+    params: ExampleSchema, request: BearerAuthRequest
+) -> ExampleResponse:
     """
     Some test description
     """
@@ -36,4 +38,4 @@ async def get_example3(params: ExampleSchema):
 
 
 schema_gen = OpenApiGenerator(app)
-print(json.dumps(schema_gen.get_schema(), indent=4, sort_keys=True))
+print(json_dumps(schema_gen.get_schema(), indent=True))

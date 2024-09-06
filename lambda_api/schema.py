@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any, ClassVar, TypedDict
+from typing import Any, ClassVar, NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,20 +17,24 @@ class Headers(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class RequestConfigDict(TypedDict, total=False):
+class RequestConfigBase(NamedTuple):
     auth_name: str | None
+    """
+    Name of the authentication method to use for this request.
+    See https://swagger.io/docs/specification/authentication/
+    """
 
 
 class Request(BaseModel):
-    request_config: ClassVar[RequestConfigDict | None] = None
+    request_config: ClassVar[RequestConfigBase | None] = None
 
     headers: Headers
     path: str
     method: Method
-    params: dict[str, str]
-    body: dict[str, Any]
+    params: dict[str, Any]
+    body: Any
     provider_data: Any
 
 
 class BearerAuthRequest(Request):
-    request_config = RequestConfigDict(auth_name="BearerAuth")
+    request_config = RequestConfigBase(auth_name="BearerAuth")
