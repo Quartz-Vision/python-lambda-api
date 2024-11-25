@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from typing import Any, Callable, TypedDict
 
 from orjson import JSONDecodeError
@@ -12,15 +13,65 @@ from lambda_api.utils import json_dumps, json_loads
 logger = logging.getLogger(__name__)
 
 
-class AWSAdapter:
-    class ParsedRequest(TypedDict):
-        headers: dict[str, str]
-        path: str
-        method: Method
-        params: dict[str, Any]
-        body: dict[str, Any]
-        provider_data: dict[str, Any]
+class ParsedRequest(TypedDict):
+    headers: dict[str, str]
+    path: str
+    method: Method
+    params: dict[str, Any]
+    body: dict[str, Any]
+    provider_data: dict[str, Any]
 
+
+class BaseAdapter(ABC):
+    @abstractmethod
+    def parse_request(self, event: dict[str, Any]) -> ParsedRequest:
+        """
+        Parse the request data from the provider into a dictionary.
+        """
+
+    def format_request(self, request: ParsedRequest | None) -> str:
+        """
+        Format the request data into a string for logging.
+        """
+        return (
+            (
+                f"PATH: {request['path']}\n"
+                f"METHOD: {request['method']}\n"
+                f"PARAMS: {request['params']}\n"
+                f"BODY: {request['body']}"
+            )
+            if request
+            else "None"
+        )
+
+    @abstractmethod
+    def prepare_response(self, response: Response) -> Any:
+        """
+        Prepare the response data to be returned to the provider.
+        """
+
+    @abstractmethod
+    async def run_endpoint_handler(
+        self, func: Callable, request: ParsedRequest
+    ) -> Response:
+        """
+        Run the endpoint handler function.
+        """
+
+    @abstractmethod
+    def gather_args(self, request: ParsedRequest, template: InvokeTemplate) -> dict:
+        """
+        Gather the arguments for the endpoint handler function.
+        """
+
+    @abstractmethod
+    def validate_response(self, result: Any, template: InvokeTemplate) -> Response:
+        """
+        Validate the response data from the endpoint handler function.
+        """
+
+
+class AWSAdapter(BaseAdapter):
     def __init__(self, app: LambdaAPI):
         self.app = app
 
@@ -44,7 +95,7 @@ class AWSAdapter:
         headers = event.get("headers") or {}
         headers = {k.lower().replace("-", "_"): v for k, v in headers.items()}
 
-        return self.ParsedRequest(
+        return ParsedRequest(
             headers=headers,
             path=path,
             method=method,
@@ -98,7 +149,8 @@ class AWSAdapter:
             response = Response(status=400, body=f'{{"error": {e.json()}}}', raw=True)
         except Exception as e:
             logger.error(
-                f"Unhandled exception.\nREQUEST:\n{request}\nERROR:", exc_info=e
+                f"Unhandled exception.\nREQUEST:\n{self.format_request(request)}\nERROR:",
+                exc_info=e,
             )
             response = Response(status=500, body={"error": "Internal Server Error"})
 
