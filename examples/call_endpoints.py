@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from lambda_api.adapters import AWSAdapter
 from lambda_api.core import LambdaAPI
+from lambda_api.schema import Headers, Request
 
 
 class ExampleSchema(BaseModel):
@@ -32,6 +33,19 @@ async def get_example3(params: ExampleSchema):
     """Safe unhandled exceptions"""
     a = {}
     a["key"]
+
+
+class MyHeaders(Headers):
+    x_custom_header: str
+
+
+class MyRequest(Request):
+    headers: MyHeaders
+
+
+@app.get("/example4", status=200)
+async def get_example4(request: MyRequest) -> str:
+    return "Hello, " + request.headers.x_custom_header
 
 
 lambda_adapter = AWSAdapter(app)
@@ -82,6 +96,19 @@ async def main():
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example3"},
                 "queryStringParameters": {"name": "World"},
+            },
+            None,
+        ),
+    )
+
+    print("\nEXAMPLE 4")
+    print(
+        "GET /example4:\n",
+        await lambda_adapter.lambda_handler(
+            {
+                "httpMethod": "GET",
+                "pathParameters": {"proxy": "/example4"},
+                "headers": {"X-Custom-Header": "World from a header"},
             },
             None,
         ),

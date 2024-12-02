@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 from lambda_api.core import LambdaAPI
 from lambda_api.docsgen import OpenApiGenerator
-from lambda_api.schema import BearerAuthRequest
+from lambda_api.schema import BearerAuthRequest, Headers, Request
 from lambda_api.utils import json_dumps
 
 
@@ -35,6 +35,19 @@ async def get_example2(
 @app.get("/example3", status=200, tags=None)
 async def get_example3(params: ExampleSchema):
     pass
+
+
+class MyHeaders(Headers):
+    x_custom_header: str
+
+
+class MyRequest(Request):
+    headers: MyHeaders
+
+
+@app.get("/example4", status=200)
+async def get_example4(request: MyRequest) -> str:
+    return "Hello, " + request.headers.x_custom_header
 
 
 schema_gen = OpenApiGenerator(app)

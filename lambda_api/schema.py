@@ -26,6 +26,7 @@ class RequestConfigBase(NamedTuple):
 
 
 class Request(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     request_config: ClassVar[RequestConfigBase | None] = None
 
     headers: Headers

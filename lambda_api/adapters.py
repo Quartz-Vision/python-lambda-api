@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, TypedDict
+from typing import Any, Callable, NamedTuple
 
 from orjson import JSONDecodeError
 from pydantic import BaseModel, ValidationError
@@ -13,7 +13,7 @@ from lambda_api.utils import json_dumps, json_loads
 logger = logging.getLogger(__name__)
 
 
-class ParsedRequest(TypedDict):
+class ParsedRequest(NamedTuple):
     headers: dict[str, str]
     path: str
     method: Method
@@ -33,16 +33,23 @@ class BaseAdapter(ABC):
         """
         Format the request data into a string for logging.
         """
-        return (
-            (
-                f"PATH: {request['path']}\n"
-                f"METHOD: {request['method']}\n"
-                f"PARAMS: {request['params']}\n"
-                f"BODY: {request['body']}"
+        if not request:
+            return "None"
+
+        request_str = f"{request.method} {request.path}"
+        if request.params:
+            request_str += (
+                "?"
+                + "&".join(f"{k}={v}" for k, v in request.params.items())
+                + f"\nparams: {request.params}"
             )
-            if request
-            else "None"
-        )
+
+        if request.body:
+            request_str += f"\body: {request.body}"
+
+        if request.headers:
+            request_str += f"\nheaders: {request.headers}"
+        return request_str
 
     @abstractmethod
     def prepare_response(self, response: Response) -> Any:
@@ -124,8 +131,8 @@ class AWSAdapter(BaseAdapter):
         try:
             request = self.parse_request(event)
 
-            endpoint = self.app.route_table.get(request["path"])
-            method = request["method"]
+            endpoint = self.app.route_table.get(request.path)
+            method = request.method
 
             match (endpoint, method):
                 case (None, _):
@@ -176,7 +183,8 @@ class AWSAdapter(BaseAdapter):
             return self.validate_response(result, template)
         except ValidationError as e:
             logger.error(
-                f"Response data is invalid.\nREQUEST:\n{request}\nERROR:", exc_info=e
+                f"Response data is invalid.\nREQUEST:\n{self.format_request(request)}\nERROR:",
+                exc_info=e,
             )
             return Response(status=500, body={"error": "Internal Server Error"})
 
@@ -189,9 +197,9 @@ class AWSAdapter(BaseAdapter):
         if template.request:
             args["request"] = template.request.model_validate(request)
         if template.params:
-            args["params"] = template.params.model_validate(request["params"])
+            args["params"] = template.params.model_validate(request.params)
         if template.body:
-            args["body"] = template.body.model_validate(request["body"])
+            args["body"] = template.body.model_validate(request.body)
 
         return args
 
