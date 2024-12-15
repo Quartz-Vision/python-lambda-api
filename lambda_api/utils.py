@@ -1,3 +1,5 @@
+from json.decoder import JSONDecodeError
+
 import orjson
 
 
@@ -28,3 +30,33 @@ def json_dumps(data, indent=False) -> str:
 
 def json_loads(data: str):
     return orjson.loads(data)
+
+
+def json_decode_error_fragment(e: JSONDecodeError) -> str:
+    start = max(0, e.pos - 20)
+    end = min(len(e.doc), e.pos + 20)
+
+    prev_newline = e.doc.rfind("\n", start, e.pos)
+    if prev_newline != -1:
+        hint_pointer = "^".rjust(e.colno)
+    else:
+        hint_pointer = "^".rjust(e.colno - start)
+
+    next_newline = e.doc.find("\n", e.pos, end)
+    if next_newline != -1:
+        fragment = [
+            e.doc[start : next_newline + 1],
+            hint_pointer,
+            e.msg,
+            "\n",
+            e.doc[next_newline + 1 : end],
+        ]
+    else:
+        fragment = [
+            e.doc[start:end],
+            "\n",
+            hint_pointer,
+            e.msg,
+        ]
+
+    return "".join(fragment)

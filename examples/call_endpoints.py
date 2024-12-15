@@ -11,6 +11,10 @@ class ExampleSchema(BaseModel):
     name: str
 
 
+class ExampleBody(BaseModel):
+    name2: str
+
+
 class ExampleResponse(BaseModel):
     message: str
 
@@ -19,8 +23,8 @@ app = LambdaAPI(prefix="/api", schema_id="example")
 
 
 @app.get("/example", status=200)
-async def get_example(params: ExampleSchema) -> str:
-    return "Hello, " + params.name
+async def get_example(params: ExampleSchema, body: ExampleBody) -> str:
+    return "Hello, " + params.name + " and " + body.name2
 
 
 @app.get("/example2", status=200)
@@ -54,11 +58,12 @@ lambda_adapter = AWSAdapter(app)
 async def main():
     print("EXAMPLE 1")
     print(
-        await lambda_adapter.lambda_handler(
+        await lambda_adapter.run(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example"},
                 "queryStringParameters": {"name": "World"},
+                "body": '{"name2": "World}',
             },
             None,
         )
@@ -67,7 +72,7 @@ async def main():
     print("\nEXAMPLE 2")
     print(
         "OPTIONS /example2?name=World:\n",
-        await lambda_adapter.lambda_handler(
+        await lambda_adapter.run(
             {
                 "httpMethod": "OPTIONS",
                 "pathParameters": {"proxy": "/example2"},
@@ -78,7 +83,7 @@ async def main():
     )
     print(
         "GET /example2?name=World:\n",
-        await lambda_adapter.lambda_handler(
+        await lambda_adapter.run(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example2"},
@@ -91,7 +96,7 @@ async def main():
     print("\nEXAMPLE 3")
     print(
         "GET /example3?name=World:\n",
-        await lambda_adapter.lambda_handler(
+        await lambda_adapter.run(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example3"},
@@ -104,7 +109,7 @@ async def main():
     print("\nEXAMPLE 4")
     print(
         "GET /example4:\n",
-        await lambda_adapter.lambda_handler(
+        await lambda_adapter.run(
             {
                 "httpMethod": "GET",
                 "pathParameters": {"proxy": "/example4"},
