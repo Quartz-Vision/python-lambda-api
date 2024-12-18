@@ -52,7 +52,7 @@ class ParsedRequest:
             )
 
         if self.body:
-            request_str += f"\body: {self.body}"
+            request_str += f"\nbody: {self.body}"
 
         if self.headers:
             request_str += f"\nheaders: {self.headers}"
