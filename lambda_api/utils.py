@@ -35,6 +35,7 @@ def json_loads(data: str):
 def json_decode_error_fragment(e: JSONDecodeError) -> str:
     start = max(0, e.pos - 20)
     end = min(len(e.doc), e.pos + 20)
+    msg = e.msg[:-2] if e.msg.endswith(" at") else e.msg
 
     prev_newline = e.doc.rfind("\n", start, e.pos)
     if prev_newline != -1:
@@ -45,18 +46,18 @@ def json_decode_error_fragment(e: JSONDecodeError) -> str:
     next_newline = e.doc.find("\n", e.pos, end)
     if next_newline != -1:
         fragment = [
-            e.doc[start : next_newline + 1],
-            hint_pointer,
-            e.msg,
+            e.doc[start:next_newline],
             "\n",
-            e.doc[next_newline + 1 : end],
+            hint_pointer,
+            msg,
+            e.doc[next_newline:end],
         ]
     else:
         fragment = [
             e.doc[start:end],
             "\n",
             hint_pointer,
-            e.msg,
+            msg,
         ]
 
     return "".join(fragment)
