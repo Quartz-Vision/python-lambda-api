@@ -22,7 +22,7 @@ class ExampleResponse(BaseModel):
 app = LambdaAPI(prefix="/api", schema_id="example")
 
 
-@app.get("/example", status=200)
+@app.patch("/example", status=200)
 async def get_example(params: ExampleSchema, body: ExampleBody) -> str:
     return "Hello, " + params.name + " and " + body.name2
 
@@ -60,7 +60,7 @@ async def main():
     print(
         await lambda_adapter.run(
             {
-                "httpMethod": "GET",
+                "httpMethod": "PATCH",
                 "pathParameters": {"proxy": "/example"},
                 "queryStringParameters": {"name": "World"},
                 "body": '{"name2": "World}',
