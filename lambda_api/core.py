@@ -1,7 +1,8 @@
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from inspect import _empty, signature
-from typing import Any, Callable, NotRequired, Type, TypedDict, Unpack
+from typing import Any, Callable, Iterable, NotRequired, Type, TypedDict, Unpack
 
 from pydantic import BaseModel, RootModel, ValidationError
 
@@ -113,52 +114,78 @@ class CORSConfig:
     max_age: int = 3000
 
 
-class LambdaAPI:
-    class MethodDecorator:
-        __slots__ = ("api", "method")
+class AbstractRouter(ABC):
+    @abstractmethod
+    def add_route(
+        self, fn: Callable, path: str, method: Method, config: RouteParams
+    ) -> Callable:
+        pass
 
-        def __init__(
-            self,
-            api: "LambdaAPI",
-            method: Method,
-        ):
-            self.api = api
-            self.method = method
+    def post(self, path: str, **config: Unpack[RouteParams]):
+        return lambda fn: self.add_route(fn, path, Method.POST, config)
 
-        def decorate(self, func, path: str, config: RouteParams):
-            if path not in self.api.route_table:
-                endpoint = self.api.route_table[path] = {}
-            else:
-                endpoint = self.api.route_table[path]
+    def get(self, path: str, **config: Unpack[RouteParams]):
+        return lambda fn: self.add_route(fn, path, Method.GET, config)
 
-            endpoint[self.method] = func
+    def put(self, path: str, **config: Unpack[RouteParams]):
+        return lambda fn: self.add_route(fn, path, Method.PUT, config)
 
-            func_signature = signature(func)
-            params = func_signature.parameters
-            return_type = func_signature.return_annotation
+    def delete(self, path: str, **config: Unpack[RouteParams]):
+        return lambda fn: self.add_route(fn, path, Method.DELETE, config)
 
-            if return_type is not _empty and return_type is not None:
-                if not isinstance(return_type, type) or not issubclass(
-                    return_type, BaseModel
-                ):
-                    return_type = RootModel[return_type]
-            else:
-                return_type = None
+    def patch(self, path: str, **config: Unpack[RouteParams]):
+        return lambda fn: self.add_route(fn, path, Method.PATCH, config)
 
-            func.__invoke_template__ = InvokeTemplate(
-                params=params["params"].annotation if "params" in params else None,
-                body=params["body"].annotation if "body" in params else None,
-                request=params["request"].annotation if "request" in params else None,
-                response=return_type,
-                status=config.get("status", 200),
-                tags=config.get("tags", self.api.default_tags) or [],
-            )
+    @abstractmethod
+    def get_routes(
+        self, root: str
+    ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
+        ...
 
-            return func
+    @abstractmethod
+    def add_router(self, router: "AbstractRouter"):
+        ...
 
-        def __call__(self, path: str, **config: Unpack[RouteParams]):
-            return lambda fn: self.decorate(fn, path, config)
 
+class Router(AbstractRouter):
+    def __init__(self, base="", tags: list[str] | None = None):
+        self.base = base
+        self.tags = tags or []
+        self.routes: dict[str, dict[Method, tuple[Callable, RouteParams]]] = {}
+        self.routers: set[AbstractRouter] = set()
+
+    def add_route(
+        self,
+        fn: Callable,
+        path: str,
+        method: Method,
+        config: RouteParams,
+    ) -> Callable:
+        if path not in self.routes:
+            self.routes[path] = {}
+        self.routes[path][method] = (fn, config)
+        return fn
+
+    def add_router(self, router: AbstractRouter):
+        if router is self:
+            raise ValueError("A router cannot be added to itself")
+
+        self.routers.add(router)
+
+    def get_routes(
+        self, root: str = ""
+    ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
+        base = root + self.base
+
+        for path, methods in self.routes.items():
+            for method, (fn, config) in methods.items():
+                yield fn, base + path, method, config
+
+        for router in self.routers:
+            yield from router.get_routes(base)
+
+
+class LambdaAPI(AbstractRouter):
     def __init__(
         self,
         prefix="",
@@ -166,26 +193,30 @@ class LambdaAPI:
         cors: CORSConfig | None = None,
         tags: list[str] | None = None,
     ):
+        """
+        Initialize the LambdaAPI instance.
+
+        Args:
+            prefix: Used to generate OpenAPI schema. Doesn't affect the actual path while running.
+            schema_id: The id of the schema. Helpful when stitching multiple schemas together.
+            cors: Response CORS configuration.
+            tags: Tags to add to the endpoint.
+        """
+
         # dict[path, dict[method, function]]
-        self.route_table: dict[str, dict[str, Callable]] = {}
+        self.route_table: dict[str, dict[Method, Callable]] = {}
 
         self.prefix = prefix
         self.schema_id = schema_id
         self.cors_config = cors
-        self.cors_headers = {}
+        self.common_response_headers = {}
         self.default_tags = tags or []
 
-        self._bake_cors_headers()
+        self._bake_headers()
 
-        self.post = self.MethodDecorator(self, Method.POST)
-        self.get = self.MethodDecorator(self, Method.GET)
-        self.put = self.MethodDecorator(self, Method.PUT)
-        self.delete = self.MethodDecorator(self, Method.DELETE)
-        self.patch = self.MethodDecorator(self, Method.PATCH)
-
-    def _bake_cors_headers(self):
+    def _bake_headers(self):
         if self.cors_config:
-            self.cors_headers = {
+            self.common_response_headers = {
                 "Access-Control-Allow-Origin": ",".join(self.cors_config.allow_origins),
                 "Access-Control-Allow-Methods": ",".join(
                     self.cors_config.allow_methods
@@ -204,7 +235,9 @@ class LambdaAPI:
             case (None, _):
                 response = Response(status=404, body={"error": "Not Found"})
             case (_, Method.OPTIONS):
-                response = Response(status=200, body=None, headers=self.cors_headers)
+                response = Response(
+                    status=200, body=None, headers=self.common_response_headers
+                )
             case (_, _) if method in endpoint:
                 try:
                     response = await self.run_endpoint_handler(
@@ -253,3 +286,51 @@ class LambdaAPI:
                 exc_info=e,
             )
             return Response(status=500, body={"error": "Internal Server Error"})
+
+    def add_route(
+        self, fn: Callable, path: str, method: Method, config: RouteParams
+    ) -> Callable:
+        if path not in self.route_table:
+            endpoint = self.route_table[path] = {}
+        else:
+            endpoint = self.route_table[path]
+
+        endpoint[method] = fn
+
+        if not hasattr(fn, "__invoke_template__"):
+            fn_signature = signature(fn)
+            params = fn_signature.parameters
+            return_type = fn_signature.return_annotation
+
+            if return_type is not _empty and return_type is not None:
+                if not isinstance(return_type, type) or not issubclass(
+                    return_type, BaseModel
+                ):
+                    return_type = RootModel[return_type]
+            else:
+                return_type = None
+
+            fn.__invoke_template__ = InvokeTemplate(  # type: ignore
+                params=params["params"].annotation if "params" in params else None,
+                body=params["body"].annotation if "body" in params else None,
+                request=params["request"].annotation if "request" in params else None,
+                response=return_type,
+                status=config.get("status", 200),
+                tags=config.get("tags", self.default_tags) or [],
+            )
+
+        return fn
+
+    def get_routes(
+        self, root: str = ""
+    ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
+        for path, methods in self.route_table.items():
+            for method, fn in methods.items():
+                yield fn, path, method, {
+                    "status": fn.__invoke_template__.status,  # type: ignore
+                    "tags": fn.__invoke_template__.tags,  # type: ignore
+                }
+
+    def add_router(self, router: AbstractRouter):
+        for route_args in router.get_routes(""):
+            self.add_route(*route_args)
