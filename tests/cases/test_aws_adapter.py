@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lambda_api.adapters import AWSAdapter
-from lambda_api.core import LambdaAPI, ParsedRequest, Response
+from lambda_api.app import LambdaAPI, ParsedRequest, Response
 from lambda_api.schema import Method
 from lambda_api.utils import json_dumps
 

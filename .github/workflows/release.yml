@@ -23,6 +23,25 @@ jobs:
         run: |
           echo "PKG_VERSION=$(sed -n 's/.*version="\(.*\)",.*/\1/p' setup.py)" >> $GITHUB_ENV
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: twine upload dist/*
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
@@ -31,3 +50,6 @@ jobs:
           tag: ${{ env.PKG_VERSION }}
           commit: "main"
           draft: false
+          artifacts: "dist/*"
+          generateReleaseNotes: true
+          makeLatest: true

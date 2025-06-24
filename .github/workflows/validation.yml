@@ -18,7 +18,7 @@ jobs:
         id: setup-python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Use venv cache
         id: cache-venv
@@ -52,3 +52,8 @@ jobs:
         run: |
           . .venv/bin/activate
           python -m flake8 .
+
+      - name: Pytest
+        run: |
+          . .venv/bin/activate
+          python -m pytest tests/cases -cov=flashtap_data_lib -n 2 -c pytest.ini

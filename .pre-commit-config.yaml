@@ -1,17 +1,17 @@
 # https://pre-commit.com/hooks.html
 
 default_language_version:
-  python: python3.12
+  python: python3.13
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
 
   - repo: https://github.com/PyCQA/autoflake
-    rev: v2.2.0
+    rev: v2.3.1
     hooks:
       - id: autoflake
         args:
@@ -22,27 +22,28 @@ repos:
           ]
 
   - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+    rev: 6.0.1
     hooks:
       - id: isort
         name: isort (python)
-        args: ["--profile=black", "--float-to-top"]
+        args: ["--profile=black", "--float-to-top", "--combine-as"]
 
   - repo: https://github.com/ambv/black
-    rev: 23.7.0
+    rev: 25.1.0
     hooks:
       - id: black
-        language_version: python3.12
+        language_version: python3.13
 
-  - repo: https://github.com/pre-commit/mirrors-autopep8
-    rev: v2.0.2
+  - repo: https://github.com/hhatto/autopep8
+    rev: v2.3.2
     hooks:
       - id: autopep8
         exclude: alembic/env.py
         args: ["--in-place", "--select=E266,E262"]
+        language_version: python3.13
 
   - repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
+    rev: 7.3.0
     hooks:
       - id: flake8
         exclude: alembic/env.py

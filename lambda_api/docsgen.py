@@ -1,13 +1,14 @@
 import inspect
 from collections import defaultdict
-from typing import Any, Callable
+from typing import Any
 
-from lambda_api.core import InvokeTemplate, LambdaAPI
+from lambda_api.app import LambdaAPI, RouteWrapper
 from lambda_api.utils import json_dumps, json_loads
 
 
 class OpenApiGenerator:
     def __init__(self, app: LambdaAPI):
+        self.app = app
         self.schema_id = app.schema_id
         self.route_table = app.route_table
         self.prefix = app.prefix
@@ -29,16 +30,16 @@ class OpenApiGenerator:
         return json_loads(txt_schema)
 
     def _add_endpoint_to_schema(
-        self, schema: dict[str, Any], path: str, method: str, func: Callable
+        self, schema: dict[str, Any], path: str, method: str, route: RouteWrapper
     ):
         components = schema["components"]["schemas"]
 
-        template: InvokeTemplate = func.__invoke_template__  # type: ignore
+        template = self.app.get_invoke_template(route)
         full_path = self.prefix + path
         func_schema = schema["paths"][full_path][method.lower()]
 
-        if func.__doc__:
-            func_schema["description"] = inspect.getdoc(func)
+        if route.handler.__doc__:
+            func_schema["description"] = inspect.getdoc(route.handler)
 
         if template.request:
             # Handle headers

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import BaseModel
 
-from lambda_api.core import LambdaAPI, ParsedRequest, Response
+from lambda_api.app import LambdaAPI, ParsedRequest, Response
 from lambda_api.schema import BearerAuthRequest, Headers, Method, Request
 
 

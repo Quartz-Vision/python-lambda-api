@@ -2,7 +2,9 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from lambda_api.core import LambdaAPI, RouteParams, Router
+from lambda_api.app import LambdaAPI
+from lambda_api.base import RouteParams
+from lambda_api.router import Router
 from lambda_api.schema import Method
 
 
@@ -10,10 +12,10 @@ from lambda_api.schema import Method
 def mock_app():
     app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
 
-    def add_route(fn, *args, **kwargs):
+    def decorate_route(fn, *args, **kwargs):
         return fn
 
-    app.add_route = Mock(side_effect=add_route)
+    app.decorate_route = Mock(side_effect=decorate_route)
     return app
 
 
@@ -51,7 +53,7 @@ def test_routers_lvl1(router_api1):
     router, test_routes_api1, based_test_routes_api1 = router_api1
 
     for conf in test_routes_api1:
-        router.add_route(*conf)
+        router.decorate_route(*conf)
 
     found_routes = []
     for route in router.get_routes():
@@ -74,10 +76,10 @@ def test_routers_lvl2(router_api1, router_api2):
     all_based_routes = based_test_routes_api1 + based_test_routes_api1_2
 
     for conf in test_routes_api1:
-        router.add_route(*conf)
+        router.decorate_route(*conf)
 
     for conf in test_routes_api2:
-        router2.add_route(*conf)
+        router2.decorate_route(*conf)
 
     router.add_router(router2)
 
@@ -94,9 +96,9 @@ def test_routers_app_integration(mock_app, router_api1):
     router, test_routes_api1, based_test_routes_api1 = router_api1
 
     for conf in test_routes_api1:
-        router.add_route(*conf)
+        router.decorate_route(*conf)
 
     mock_app.add_router(router)
 
     calls = [call(*conf) for conf in based_test_routes_api1]
-    mock_app.add_route.assert_has_calls(calls)
+    mock_app.decorate_route.assert_has_calls(calls)

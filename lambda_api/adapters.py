@@ -3,15 +3,14 @@ from typing import Any
 
 from orjson import JSONDecodeError
 
-from lambda_api.core import LambdaAPI, ParsedRequest, Response
+from lambda_api.app import LambdaAPI, ParsedRequest, Response
 from lambda_api.schema import Method
 from lambda_api.utils import json_decode_error_fragment, json_dumps, json_loads
 
 
 class BaseAdapter(ABC):
     @abstractmethod
-    def __init__(self, app: LambdaAPI):
-        ...
+    def __init__(self, app: LambdaAPI): ...
 
     @abstractmethod
     def parse_request(self, event: dict[str, Any]) -> ParsedRequest:
