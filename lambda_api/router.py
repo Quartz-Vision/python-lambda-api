@@ -8,11 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 class Router(AbstractRouter):
-    def __init__(self, base="", tags: list[str] | None = None):
-        self.base = base
+    def __init__(self, tags: list[str] | None = None):
         self.tags = tags or []
         self.routes: dict[str, dict[Method, tuple[Callable, RouteParams]]] = {}
-        self.routers: set[AbstractRouter] = set()
+        self.routers: set[tuple[str, AbstractRouter]] = set()
 
     def decorate_route(
         self,
@@ -26,20 +25,17 @@ class Router(AbstractRouter):
         self.routes[path][method] = (fn, config)
         return fn
 
-    def add_router(self, router: AbstractRouter):
-        if router is self:
-            raise ValueError("A router cannot be added to itself")
-
-        self.routers.add(router)
+    def add_router(self, prefix: str, router: AbstractRouter):
+        self.routers.add(("/" + prefix.strip("/"), router))
 
     def get_routes(
-        self, root: str = ""
+        self, prefix: str = ""
     ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
-        base = root + self.base
+        prefix = "/" + prefix.strip("/")
 
         for path, methods in self.routes.items():
             for method, (fn, config) in methods.items():
-                yield fn, base + path, method, config
+                yield fn, prefix + path, method, config
 
-        for router in self.routers:
-            yield from router.get_routes(base)
+        for router_prefix, router in self.routers:
+            yield from router.get_routes(prefix + router_prefix)

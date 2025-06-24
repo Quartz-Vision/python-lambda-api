@@ -40,8 +40,8 @@ class AbstractRouter(ABC):
 
     @abstractmethod
     def get_routes(
-        self, root: str
+        self, prefix: str
     ) -> Iterable[tuple[Callable, str, Method, RouteParams]]: ...
 
     @abstractmethod
-    def add_router(self, router: "AbstractRouter"): ...
+    def add_router(self, prefix: str, router: "AbstractRouter"): ...

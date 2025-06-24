@@ -251,12 +251,13 @@ class LambdaAPI(AbstractRouter):
         return fn
 
     def get_routes(
-        self, root: str = ""
+        self, prefix: str = ""
     ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
+        prefix = "/" + prefix.strip("/")
         for path, methods in self.route_table.items():
             for method, route in methods.items():
-                yield route.handler, path, method, route.config
+                yield route.handler, prefix + path, method, route.config
 
-    def add_router(self, router: AbstractRouter):
-        for route_args in router.get_routes(""):
+    def add_router(self, prefix: str, router: AbstractRouter):
+        for route_args in router.get_routes(prefix):
             self.decorate_route(*route_args)
