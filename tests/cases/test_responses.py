@@ -17,6 +17,16 @@ class ExampleResponse(BaseModel):
 def app():
     app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
 
+    @app.get("", status=200)
+    async def get_empty_path() -> str:
+        """@empty"""
+        return "empty"
+
+    @app.get("/", status=200)
+    async def get_root() -> str:
+        """@root"""
+        return "root"
+
     @app.get("/example", status=200)
     async def get_example(params: ExampleSchema) -> str:
         """@example"""
@@ -52,6 +62,28 @@ def app():
 
 @pytest.mark.asyncio
 async def test_responses(app: LambdaAPI):
+    assert await app.run(
+        ParsedRequest(
+            headers={},
+            path="",
+            method=Method.GET,
+            params={},
+            body={},
+            provider_data={},
+        )
+    ) == Response(status=200, body="empty")
+
+    assert await app.run(
+        ParsedRequest(
+            headers={},
+            path="/",
+            method=Method.GET,
+            params={},
+            body={},
+            provider_data={},
+        )
+    ) == Response(status=200, body="root")
+
     assert await app.run(
         ParsedRequest(
             headers={},

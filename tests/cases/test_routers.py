@@ -53,42 +53,71 @@ def router_api2():
     return "/api2", router, test_routes_api2, prefixed_routes_api2
 
 
-def test_routers_lvl1(router_api1):
-    expected_prefix, router, test_routes_api1, prefixed_routes_api1 = router_api1
+@pytest.fixture
+def router_empty():
+    router = Router()
+    test_routes = [
+        (lambda: "test", "/test-empty", Method.GET, RouteParams(status=200)),
+    ]
+    prefixed_routes = [
+        (fn, "" + path, method, config) for fn, path, method, config in test_routes
+    ]
+    return "", router, test_routes, prefixed_routes
 
-    for conf in test_routes_api1:
+
+@pytest.mark.parametrize(
+    "test_router_data", ["router_api1", "router_api2", "router_empty"]
+)
+def test_routers_lvl1(test_router_data, request):
+    expected_prefix, router, test_routes, prefixed_routes = request.getfixturevalue(
+        test_router_data
+    )
+
+    for conf in test_routes:
         router.decorate_route(*conf)
 
     found_routes = []
     for route in router.get_routes(expected_prefix):
-        assert route in prefixed_routes_api1
+        assert route in prefixed_routes
         assert route not in found_routes
         found_routes.append(route)
 
-    assert len(found_routes) == len(prefixed_routes_api1)
+    assert len(found_routes) == len(prefixed_routes)
 
 
-def test_routers_lvl2(router_api1, router_api2):
-    expected_prefix1, router, test_routes_api1, prefixed_routes_api1 = router_api1
-    expected_prefix2, router2, test_routes_api2, prefixed_routes_api2 = router_api2
+@pytest.mark.parametrize(
+    "router_pair",
+    [
+        ("router_api1", "router_api2"),
+        ("router_empty", "router_api1"),
+        ("router_api1", "router_empty"),
+    ],
+)
+def test_routers_lvl2(router_pair, request):
+    expected_prefix1, router1, test_routes1, prefixed_routes1 = request.getfixturevalue(
+        router_pair[0]
+    )
+    expected_prefix2, router2, test_routes2, prefixed_routes2 = request.getfixturevalue(
+        router_pair[1]
+    )
 
-    prefixed_routes_api1_2 = [
+    prefixed_routes1_2 = [
         (fn, expected_prefix1 + path, method, config)
-        for fn, path, method, config in prefixed_routes_api2
+        for fn, path, method, config in prefixed_routes2
     ]
 
-    all_based_routes = prefixed_routes_api1 + prefixed_routes_api1_2
+    all_based_routes = prefixed_routes1 + prefixed_routes1_2
 
-    for conf in test_routes_api1:
-        router.decorate_route(*conf)
+    for conf in test_routes1:
+        router1.decorate_route(*conf)
 
-    for conf in test_routes_api2:
+    for conf in test_routes2:
         router2.decorate_route(*conf)
 
-    router.add_router(expected_prefix2, router2)
+    router1.add_router(expected_prefix2, router2)
 
     found_routes = []
-    for route in router.get_routes(expected_prefix1):
+    for route in router1.get_routes(expected_prefix1):
         assert route in all_based_routes
         assert route not in found_routes
         found_routes.append(route)
@@ -96,13 +125,18 @@ def test_routers_lvl2(router_api1, router_api2):
     assert len(found_routes) == len(all_based_routes)
 
 
-def test_routers_app_integration(mock_app, router_api1):
-    expected_prefix, router, test_routes_api1, prefixed_routes_api1 = router_api1
+@pytest.mark.parametrize(
+    "test_router_data", ["router_api1", "router_api2", "router_empty"]
+)
+def test_routers_app_integration(mock_app, test_router_data, request):
+    expected_prefix, router, test_routes, prefixed_routes = request.getfixturevalue(
+        test_router_data
+    )
 
-    for conf in test_routes_api1:
+    for conf in test_routes:
         router.decorate_route(*conf)
 
     mock_app.add_router(expected_prefix, router)
 
-    calls = [call(*conf) for conf in prefixed_routes_api1]
+    calls = [call(*conf) for conf in prefixed_routes]
     mock_app.decorate_route.assert_has_calls(calls)
