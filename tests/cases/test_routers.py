@@ -11,11 +11,7 @@ from lambda_api.schema import Method
 @pytest.fixture
 def mock_app():
     app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
-
-    def decorate_route(fn, *args, **kwargs):
-        return fn
-
-    app.decorate_route = Mock(side_effect=decorate_route)
+    app.decorate_route = Mock(side_effect=app.decorate_route)
     return app
 
 
@@ -106,7 +102,7 @@ def test_routers_lvl2(router_pair, request):
         for fn, path, method, config in prefixed_routes2
     ]
 
-    all_based_routes = prefixed_routes1 + prefixed_routes1_2
+    all_prefixed_routes = prefixed_routes1 + prefixed_routes1_2
 
     for conf in test_routes1:
         router1.decorate_route(*conf)
@@ -118,11 +114,11 @@ def test_routers_lvl2(router_pair, request):
 
     found_routes = []
     for route in router1.get_routes(expected_prefix1):
-        assert route in all_based_routes
+        assert route in all_prefixed_routes
         assert route not in found_routes
         found_routes.append(route)
 
-    assert len(found_routes) == len(all_based_routes)
+    assert len(found_routes) == len(all_prefixed_routes)
 
 
 @pytest.mark.parametrize(
@@ -140,3 +136,11 @@ def test_routers_app_integration(mock_app, test_router_data, request):
 
     calls = [call(*conf) for conf in prefixed_routes]
     mock_app.decorate_route.assert_has_calls(calls)
+
+    found_routes = []
+    for route in mock_app.get_routes(""):
+        assert route in prefixed_routes
+        assert route not in found_routes
+        found_routes.append(route)
+
+    assert len(found_routes) == len(prefixed_routes)

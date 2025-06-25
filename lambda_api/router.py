@@ -20,19 +20,19 @@ class Router(AbstractRouter):
         method: Method,
         config: RouteParams,
     ) -> Callable:
-        path = "/" + path.strip("/") if path else ""
+        path = "/" + path.lstrip("/") if path else ""
         if path not in self.routes:
             self.routes[path] = {}
         self.routes[path][method] = (fn, config)
         return fn
 
     def add_router(self, prefix: str, router: AbstractRouter):
-        self.routers.add(("/" + prefix.strip("/") if prefix else "", router))
+        self.routers.add(("/" + prefix.lstrip("/") if prefix else "", router))
 
     def get_routes(
         self, prefix: str
     ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
-        prefix = "/" + prefix.strip("/") if prefix else ""
+        prefix = "/" + prefix.lstrip("/") if prefix else ""
 
         for path, methods in self.routes.items():
             for method, (fn, config) in methods.items():
