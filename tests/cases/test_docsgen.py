@@ -18,6 +18,16 @@ class ExampleResponse(BaseModel):
 def app():
     app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
 
+    @app.get("")
+    async def empty_path() -> None:
+        """@empty"""
+        ...
+
+    @app.get("/")
+    async def root_path() -> None:
+        """@root"""
+        ...
+
     @app.get("/example", status=200)
     async def get_example(params: ExampleSchema) -> str:
         """@example"""
@@ -74,6 +84,13 @@ def test_docsgen_endpoints_map(app: LambdaAPI):
     assert set(schema["paths"]["/api/example2"].keys()) == {"patch"}
     assert set(schema["paths"]["/api/example4"].keys()) == {"get", "post"}
     assert set(schema["paths"]["/api/example"].keys()) == {"get"}
+
+
+def test_docsgen_root_and_empty(app: LambdaAPI):
+    schema = OpenApiGenerator(app).get_schema()
+
+    assert "@empty" in schema["paths"]["/api"]["get"]["description"]
+    assert "@root" in schema["paths"]["/api/"]["get"]["description"]
 
 
 def test_docsgen_description(app: LambdaAPI):

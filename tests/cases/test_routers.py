@@ -23,6 +23,8 @@ def mock_app():
 def router_api1():
     router = Router()
     test_routes_api1 = [
+        (lambda: "test", "", Method.GET, RouteParams(status=200)),
+        (lambda: "test", "/", Method.GET, RouteParams(status=200)),
         (lambda: "test", "/test", Method.GET, RouteParams(status=200)),
         (lambda: "test", "/test2", Method.POST, RouteParams(status=200)),
         (lambda: "test", "/test2", Method.GET, RouteParams(status=200)),
@@ -38,6 +40,8 @@ def router_api1():
 def router_api2():
     router = Router()
     test_routes_api2 = [
+        (lambda: "test", "", Method.GET, RouteParams(status=200)),
+        (lambda: "test", "/", Method.GET, RouteParams(status=200)),
         (lambda: "test", "/test3", Method.GET, RouteParams(status=200)),
         (lambda: "test", "/test4", Method.POST, RouteParams(status=200)),
         (lambda: "test", "/test4", Method.GET, RouteParams(status=200)),

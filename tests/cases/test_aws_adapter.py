@@ -17,34 +17,70 @@ def mock_app():
     return app
 
 
+@pytest.fixture
+def mock_adapter(mock_app: LambdaAPI):
+    return AWSAdapter(mock_app)
+
+
+class MockRequest:
+    def __init__(
+        self, path: str, method: Method, params: dict, body: dict, headers: dict
+    ):
+        self.raw = {
+            "httpMethod": method.value,
+            "pathParameters": {"proxy": path},
+            "queryStringParameters": params,
+            "body": body,
+            "headers": headers,
+        }
+        self.parsed = ParsedRequest(
+            provider_data=self.raw,
+            headers=headers,
+            path=path,
+            method=method,
+            params=params,
+            body=body,
+        )
+
+
 @pytest.mark.asyncio
-async def test_parsing(mock_app):
-    # Mock the api .run method
-
-    adapter = AWSAdapter(mock_app)
-
-    raw_data = {
-        "httpMethod": "GET",
-        "pathParameters": {"proxy": "example"},
-        "queryStringParameters": {"name": "test name"},
-        "body": "{}",
-        "headers": {},
-    }
-    parsed_request = ParsedRequest(
-        headers={},
+async def test_request_response_general_parsing(
+    mock_app: LambdaAPI, mock_adapter: AWSAdapter
+):
+    request = MockRequest(
         path="/example",
         method=Method.GET,
         params={"name": "test name"},
         body={},
-        provider_data=raw_data,
+        headers={},
     )
 
-    assert adapter.parse_request(raw_data) == parsed_request
-
-    assert await adapter.run(raw_data) == {
+    assert mock_adapter.parse_request(request.raw) == request.parsed
+    assert await mock_adapter.run(request.raw) == {
         "statusCode": 200,
         "body": json_dumps({"message": "test name"}),
         "headers": {"Content-Type": "application/json"},
     }
 
-    mock_app.run.assert_awaited_once_with(parsed_request)
+    mock_app.run.assert_awaited_once_with(request.parsed)
+
+
+@pytest.mark.asyncio
+async def test_request_root_and_empty_paths(
+    mock_app: LambdaAPI, mock_adapter: AWSAdapter
+):
+    root_request = MockRequest(
+        path="/", method=Method.GET, params={"name": "test name"}, body={}, headers={}
+    )
+    empty_path_request = MockRequest(
+        path="", method=Method.GET, params={"name": "test name"}, body={}, headers={}
+    )
+
+    adapter_parsed_root = mock_adapter.parse_request(root_request.raw)
+    adapter_parsed_empty_path = mock_adapter.parse_request(empty_path_request.raw)
+
+    assert adapter_parsed_root == root_request.parsed
+    assert adapter_parsed_empty_path == empty_path_request.parsed
+
+    assert adapter_parsed_root.path == "/"
+    assert adapter_parsed_empty_path.path == ""

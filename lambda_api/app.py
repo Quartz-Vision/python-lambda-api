@@ -242,6 +242,7 @@ class LambdaAPI(AbstractRouter):
     def decorate_route(
         self, fn: Callable, path: str, method: Method, config: RouteParams
     ) -> Callable:
+        path = "/" + path.strip("/") if path else ""
         if path not in self.route_table:
             endpoint = self.route_table[path] = {}
         else:
@@ -251,9 +252,9 @@ class LambdaAPI(AbstractRouter):
         return fn
 
     def get_routes(
-        self, prefix: str = ""
+        self, prefix: str
     ) -> Iterable[tuple[Callable, str, Method, RouteParams]]:
-        prefix = "/" + prefix.strip("/")
+        prefix = "/" + prefix.strip("/") if prefix else ""
         for path, methods in self.route_table.items():
             for method, route in methods.items():
                 yield route.handler, prefix + path, method, route.config
