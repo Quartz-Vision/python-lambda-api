@@ -232,11 +232,7 @@ class LambdaAPI(AbstractRouter):
                 if "body" in params
                 else None
             ),
-            request=(
-                arbitrary_type_to_pydantic(params["request"].annotation)
-                if "request" in params
-                else None
-            ),
+            request=params["request"].annotation if "request" in params else None,
             response=arbitrary_type_to_pydantic(fn_signature.return_annotation),
             status=route.config.get("status", 200),
             tags=route.config.get("tags", self.default_tags) or [],
