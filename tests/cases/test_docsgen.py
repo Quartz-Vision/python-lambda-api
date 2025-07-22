@@ -35,7 +35,7 @@ def app():
 
     @app.patch("/example2", status=200, tags=None)
     async def get_example2(
-        params: ExampleSchema, request: BearerAuthRequest
+        params: ExampleSchema, body: int, request: BearerAuthRequest
     ) -> ExampleResponse:
         """
         Some test description. @example2

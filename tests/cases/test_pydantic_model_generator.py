@@ -1,0 +1,32 @@
+from inspect import _empty
+from uuid import uuid4
+
+import pytest
+from pydantic import BaseModel, Field, RootModel
+
+from lambda_api.utils import arbitrary_type_to_pydantic
+
+
+class MockModel(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str = "test"
+
+
+@pytest.mark.parametrize(
+    "type_, expected",
+    [
+        (str, RootModel[str]),
+        (dict, RootModel[dict]),
+        (dict[str, int], RootModel[dict[str, int]]),
+        (list, RootModel[list]),
+        (list[int], RootModel[list[int]]),
+        (int, RootModel[int]),
+        (bool, RootModel[bool]),
+        (MockModel, MockModel),
+        (_empty, None),
+        (None, None),
+    ],
+)
+def test_arbitrary_type_to_pydantic(type_, expected):
+    result = arbitrary_type_to_pydantic(type_)
+    assert result == expected

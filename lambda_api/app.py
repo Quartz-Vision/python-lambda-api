@@ -1,13 +1,14 @@
 import logging
 from dataclasses import dataclass, field
-from inspect import _empty, signature
+from inspect import signature
 from typing import Any, Callable, Iterable, Type
 
-from pydantic import BaseModel, RootModel, ValidationError
+from pydantic import BaseModel, ValidationError
 
 from lambda_api.base import AbstractRouter, RouteParams
 from lambda_api.error import APIError
 from lambda_api.schema import Method, Request
+from lambda_api.utils import arbitrary_type_to_pydantic
 
 logger = logging.getLogger(__name__)
 
@@ -219,21 +220,24 @@ class LambdaAPI(AbstractRouter):
 
         fn_signature = signature(route.handler)
         params = fn_signature.parameters
-        return_type = fn_signature.return_annotation
-
-        if return_type is not _empty and return_type is not None:
-            if not isinstance(return_type, type) or not issubclass(
-                return_type, BaseModel
-            ):
-                return_type = RootModel[return_type]
-        else:
-            return_type = None
 
         route.invoke_tamplate = InvokeTemplate(  # type: ignore
-            params=params["params"].annotation if "params" in params else None,
-            body=params["body"].annotation if "body" in params else None,
-            request=params["request"].annotation if "request" in params else None,
-            response=return_type,
+            params=(
+                arbitrary_type_to_pydantic(params["params"].annotation)
+                if "params" in params
+                else None
+            ),
+            body=(
+                arbitrary_type_to_pydantic(params["body"].annotation)
+                if "body" in params
+                else None
+            ),
+            request=(
+                arbitrary_type_to_pydantic(params["request"].annotation)
+                if "request" in params
+                else None
+            ),
+            response=arbitrary_type_to_pydantic(fn_signature.return_annotation),
             status=route.config.get("status", 200),
             tags=route.config.get("tags", self.default_tags) or [],
         )

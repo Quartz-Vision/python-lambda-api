@@ -1,6 +1,8 @@
+from inspect import _empty
 from json.decoder import JSONDecodeError
 
 import orjson
+from pydantic import BaseModel, RootModel
 
 
 def _json_arbitrary_serializer(obj):
@@ -61,3 +63,18 @@ def json_decode_error_fragment(e: JSONDecodeError) -> str:
         ]
 
     return "".join(fragment)
+
+
+def arbitrary_type_to_pydantic(type_):
+    """
+    Convert an arbitrary type to a Pydantic model type.
+    Args:
+        type_: The type to convert, can be a Pydantic model class or a type hint.
+    """
+    if type_ is not _empty and type_ is not None:
+        if not isinstance(type_, type) or not issubclass(type_, BaseModel):
+            type_ = RootModel[type_]
+    else:
+        type_ = None
+
+    return type_
