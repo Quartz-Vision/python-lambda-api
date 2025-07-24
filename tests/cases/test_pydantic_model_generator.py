@@ -15,16 +15,16 @@ class MockModel(BaseModel):
 @pytest.mark.parametrize(
     "type_, expected",
     [
-        (str, RootModel[str]),
-        (dict, RootModel[dict]),
-        (dict[str, int], RootModel[dict[str, int]]),
-        (list, RootModel[list]),
-        (list[int], RootModel[list[int]]),
-        (int, RootModel[int]),
-        (bool, RootModel[bool]),
-        (MockModel, MockModel),
-        (_empty, None),
-        (None, None),
+        (str, (RootModel[str], True)),
+        (dict, (RootModel[dict], True)),
+        (dict[str, int], (RootModel[dict[str, int]], True)),
+        (list, (RootModel[list], True)),
+        (list[int], (RootModel[list[int]], True)),
+        (int, (RootModel[int], True)),
+        (bool, (RootModel[bool], True)),
+        (MockModel, (MockModel, False)),
+        (_empty, (None, False)),
+        (None, (None, False)),
     ],
 )
 def test_arbitrary_type_to_pydantic(type_, expected):

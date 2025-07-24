@@ -61,69 +61,59 @@ def app():
 
 
 @pytest.mark.asyncio
-async def test_responses(app: LambdaAPI):
-    assert await app.run(
-        ParsedRequest(
-            headers={},
-            path="",
-            method=Method.GET,
-            params={},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body="empty")
-
-    assert await app.run(
-        ParsedRequest(
-            headers={},
-            path="/",
-            method=Method.GET,
-            params={},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body="root")
-
-    assert await app.run(
-        ParsedRequest(
-            headers={},
-            path="/example",
-            method=Method.GET,
-            params={"name": "test name"},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body="test name")
-
-    assert await app.run(
-        ParsedRequest(
-            headers={},
-            path="/example2",
-            method=Method.PATCH,
-            params={"name": "test name"},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body={"message": "test name"})
-
-    assert await app.run(
-        ParsedRequest(
-            headers={"x_custom_header": "test header"},
-            path="/example3",
-            method=Method.GET,
-            params={},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body="test header")
-
-    assert await app.run(
-        ParsedRequest(
-            headers={"x_custom_header": "test header"},
-            path="/example3",
-            method=Method.POST,
-            params={},
-            body={},
-            provider_data={},
-        )
-    ) == Response(status=200, body="test header")
+@pytest.mark.parametrize(
+    "path, method, request_data, expected_response",
+    [
+        (
+            "",
+            Method.GET,
+            {},
+            Response(status=200, body="empty"),
+        ),
+        (
+            "/",
+            Method.GET,
+            {},
+            Response(status=200, body="root"),
+        ),
+        (
+            "/example",
+            Method.GET,
+            {"params": {"name": "test name"}},
+            Response(status=200, body="test name"),
+        ),
+        (
+            "/example2",
+            Method.PATCH,
+            {"params": {"name": "test name"}},
+            Response(status=200, body={"message": "test name"}),
+        ),
+        (
+            "/example3",
+            Method.GET,
+            {"headers": {"x_custom_header": "test header"}},
+            Response(status=200, body="test header"),
+        ),
+        (
+            "/example3",
+            Method.POST,
+            {"headers": {"x_custom_header": "test header"}},
+            Response(status=200, body="test header"),
+        ),
+    ],
+)
+async def test_endpoint_handler(
+    app: LambdaAPI, path, method, request_data, expected_response
+):
+    route_wrapper = app.route_table[path][method]
+    request = ParsedRequest(
+        path=path,
+        method=method,
+        params=request_data.get("params", {}),
+        body=request_data.get("body", {}),
+        headers=request_data.get("headers", {}),
+        provider_data={},
+    )
+    response = await app.run_endpoint_handler(route_wrapper, request)
+    assert response.status == expected_response.status
+    assert response.body == expected_response.body

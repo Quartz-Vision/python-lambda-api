@@ -68,7 +68,9 @@ class InvokeTemplate:
     """
 
     params: Type[BaseModel] | None
+    params_root: bool
     body: Type[BaseModel] | None
+    body_root: bool
     request: Type[Request] | None
     response: Type[BaseModel] | None
     status: int
@@ -80,9 +82,11 @@ class InvokeTemplate:
         if self.request:
             args["request"] = self.request.model_validate(request)
         if self.params:
-            args["params"] = self.params.model_validate(request.params)
+            params = self.params.model_validate(request.params)
+            args["params"] = params if not self.params_root else params.root
         if self.body:
-            args["body"] = self.body.model_validate(request.body)
+            body = self.body.model_validate(request.body)
+            args["body"] = body if not self.body_root else body.root
 
         return args
 
@@ -109,7 +113,7 @@ class CORSConfig:
 class RouteWrapper:
     handler: Callable
     config: RouteParams
-    invoke_tamplate: InvokeTemplate | None = None
+    invoke_template: InvokeTemplate | None = None
 
 
 class LambdaAPI(AbstractRouter):
@@ -215,29 +219,35 @@ class LambdaAPI(AbstractRouter):
             return Response(status=500, body={"error": "Internal Server Error"})
 
     def get_invoke_template(self, route: RouteWrapper):
-        if route.invoke_tamplate:
-            return route.invoke_tamplate
+        if route.invoke_template:
+            return route.invoke_template
 
         fn_signature = signature(route.handler)
         params = fn_signature.parameters
 
-        route.invoke_tamplate = InvokeTemplate(  # type: ignore
-            params=(
-                arbitrary_type_to_pydantic(params["params"].annotation)
-                if "params" in params
-                else None
-            ),
-            body=(
-                arbitrary_type_to_pydantic(params["body"].annotation)
-                if "body" in params
-                else None
-            ),
+        params_type, params_root = (
+            arbitrary_type_to_pydantic(params["params"].annotation)
+            if "params" in params
+            else (None, False)
+        )
+        body_type, body_root = (
+            arbitrary_type_to_pydantic(params["body"].annotation)
+            if "body" in params
+            else (None, False)
+        )
+        response_type, _ = arbitrary_type_to_pydantic(fn_signature.return_annotation)
+
+        route.invoke_template = InvokeTemplate(  # type: ignore
+            params=params_type,
+            params_root=params_root,
+            body=body_type,
+            body_root=body_root,
             request=params["request"].annotation if "request" in params else None,
-            response=arbitrary_type_to_pydantic(fn_signature.return_annotation),
+            response=response_type,
             status=route.config.get("status", 200),
             tags=route.config.get("tags", self.default_tags) or [],
         )
-        return route.invoke_tamplate
+        return route.invoke_template
 
     def decorate_route(
         self, fn: Callable, path: str, method: Method, config: RouteParams

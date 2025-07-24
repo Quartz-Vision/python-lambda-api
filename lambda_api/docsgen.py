@@ -1,9 +1,16 @@
 import inspect
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 
 from lambda_api.app import LambdaAPI, RouteWrapper
 from lambda_api.utils import json_dumps, json_loads
+
+
+@dataclass
+class EndpointContext:
+    template: Any
+    func_schema_alias: dict
 
 
 class OpenApiGenerator:
@@ -12,96 +19,117 @@ class OpenApiGenerator:
         self.schema_id = app.schema_id
         self.route_table = app.route_table
         self.prefix = app.prefix
+        self._schema_cache: dict[str, Any] | None = None
+        self.schema: dict[str, Any]
+        self.components_alias: dict[str, Any]
 
-    def get_schema(self):
-        schema = {
+    def get_schema(self) -> dict[str, Any]:
+        if self._schema_cache is not None:
+            return self._schema_cache
+
+        self.schema = {
             "paths": defaultdict(lambda: defaultdict(dict)),
             "components": {"schemas": {}},
         }
+        self.components_alias = self.schema["components"]["schemas"]
 
         if self.schema_id:
-            schema["id"] = self.schema_id
+            self.schema["id"] = self.schema_id
 
         for path, endpoint in self.route_table.items():
             for method, func in endpoint.items():
-                self._add_endpoint_to_schema(schema, path, method, func)
+                self._add_endpoint_to_schema(path, method, func)
 
-        txt_schema = json_dumps(schema).replace("$defs", "components/schemas")
-        return json_loads(txt_schema)
+        txt_schema = json_dumps(self.schema).replace("$defs", "components/schemas")
+        self._schema_cache = json_loads(txt_schema)
+        return self._schema_cache
 
-    def _add_endpoint_to_schema(
-        self, schema: dict[str, Any], path: str, method: str, route: RouteWrapper
-    ):
-        components = schema["components"]["schemas"]
+    def _add_endpoint_to_schema(self, path: str, method: str, route: RouteWrapper):
+        ctx = EndpointContext(
+            template=self.app.get_invoke_template(route),
+            func_schema_alias=self.schema["paths"][self.prefix + path][method.lower()],
+        )
+        self._add_description(ctx, route)
+        self._add_request_details(ctx)
+        self._add_query_params(ctx)
+        self._add_body(ctx)
+        self._add_response(ctx)
+        self._add_tags(ctx)
 
-        template = self.app.get_invoke_template(route)
-        full_path = self.prefix + path
-        func_schema = schema["paths"][full_path][method.lower()]
-
+    def _add_description(self, ctx: EndpointContext, route: RouteWrapper):
         if route.handler.__doc__:
-            func_schema["description"] = inspect.getdoc(route.handler)
+            ctx.func_schema_alias["description"] = inspect.getdoc(route.handler)
 
-        if template.request:
-            # Handle headers
-            headers = (
-                template.request.model_fields["headers"].annotation
-            ).model_json_schema()  # type: ignore
-            required_keys = headers.get("required", [])
+    def _add_request_details(self, ctx: EndpointContext):
+        if not ctx.template.request:
+            return
 
-            func_schema["parameters"] = func_schema.get("parameters", []) + [
-                {
-                    "in": "header",
-                    "name": k.replace("_", "-").title(),
-                    "schema": v,
-                }
-                | ({"required": True} if k in required_keys else {})
-                for k, v in headers["properties"].items()
-            ]
+        # Handle headers
+        headers = (
+            ctx.template.request.model_fields["headers"].annotation
+        ).model_json_schema()  # type: ignore
+        required_keys = headers.get("required", [])
 
-            # Handle the request config
-            if config := template.request.request_config:
-                if auth_name := config.auth_name:
-                    func_schema["security"] = [{auth_name: []}]
+        ctx.func_schema_alias["parameters"] = ctx.func_schema_alias.get(
+            "parameters", []
+        ) + [
+            {
+                "in": "header",
+                "name": k.replace("_", "-").title(),
+                "schema": v,
+            }
+            | ({"required": True} if k in required_keys else {})
+            for k, v in headers["properties"].items()
+        ]
 
-        # Handle QUERY parameters
-        if template.params:
-            params = template.params.model_json_schema()
-            required_keys = params.get("required", [])
+        # Handle the request config
+        if config := ctx.template.request.request_config:
+            if auth_name := config.auth_name:
+                ctx.func_schema_alias["security"] = [{auth_name: []}]
 
-            components.update(params.pop("$defs", {}))
+    def _add_query_params(self, ctx: EndpointContext):
+        if not ctx.template.params:
+            return
+        params = ctx.template.params.model_json_schema()
+        required_keys = params.get("required", [])
 
-            func_schema["parameters"] = func_schema.get("parameters", []) + [
-                {"in": "query", "name": k, "schema": v}
-                | ({"required": True} if k in required_keys else {})
-                for k, v in params["properties"].items()
-            ]
+        self.components_alias.update(params.pop("$defs", {}))
 
-        # Handle BODY parameters
-        if template.body:
-            body = template.body.model_json_schema()
-            comp_title = body["title"]
+        ctx.func_schema_alias["parameters"] = ctx.func_schema_alias.get(
+            "parameters", []
+        ) + [
+            {"in": "query", "name": k, "schema": v}
+            | ({"required": True} if k in required_keys else {})
+            for k, v in params["properties"].items()
+        ]
 
-            components[comp_title] = body
-            components.update(body.pop("$defs", {}))
+    def _add_body(self, ctx: EndpointContext):
+        if not ctx.template.body:
+            return
+        body = ctx.template.body.model_json_schema()
+        comp_title = body["title"]
 
-            func_schema["requestBody"] = {
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": f"#/components/schemas/{comp_title}"}
-                    }
+        self.components_alias[comp_title] = body
+        self.components_alias.update(body.pop("$defs", {}))
+
+        ctx.func_schema_alias["requestBody"] = {
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": f"#/components/schemas/{comp_title}"}
                 }
             }
+        }
 
-        # Handle response schema
-        if template.response:
-            response = template.response.model_json_schema(mode="serialization")
+    def _add_response(self, ctx: EndpointContext):
+        if ctx.template.response:
+            response = ctx.template.response.model_json_schema(mode="serialization")
             comp_title = response["title"]
 
-            components[comp_title] = response
-            components.update(response.pop("$defs", {}))
+            self.components_alias[comp_title] = response
+            self.components_alias.update(response.pop("$defs", {}))
 
-            func_schema["responses"] = {
-                str(template.status): {
+            ctx.func_schema_alias["responses"] = {
+                str(ctx.template.status): {
                     "content": {
                         "application/json": {
                             "schema": {"$ref": f"#/components/schemas/{comp_title}"}
@@ -110,10 +138,10 @@ class OpenApiGenerator:
                 }
             }
         else:
-            func_schema["responses"] = {
-                str(template.status): {"description": "No response body"}
+            ctx.func_schema_alias["responses"] = {
+                str(ctx.template.status): {"description": "No response body"}
             }
 
-        # Handle tags
-        if template.tags:
-            func_schema["tags"] = template.tags
+    def _add_tags(self, ctx: EndpointContext):
+        if ctx.template.tags:
+            ctx.func_schema_alias["tags"] = ctx.template.tags

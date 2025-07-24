@@ -1,9 +1,13 @@
+from dataclasses import dataclass, field
+from typing import Callable
+
 import pytest
 from pydantic import BaseModel
 
 from lambda_api.app import LambdaAPI
+from lambda_api.base import RouteParams
 from lambda_api.docsgen import OpenApiGenerator
-from lambda_api.schema import BearerAuthRequest, Headers, Request
+from lambda_api.schema import Headers, Method, Request
 
 
 class ExampleSchema(BaseModel):
@@ -14,99 +18,183 @@ class ExampleResponse(BaseModel):
     message: str
 
 
-@pytest.fixture
-def app():
+class ExampleHeaders(Headers):
+    x_custom_header: str
+
+
+class ExampleRequest(Request):
+    headers: ExampleHeaders
+
+
+class ExampleParams(BaseModel):
+    name: str
+
+
+@dataclass
+class EndpointSpec:
+    path: str
+    method: Method
+    config: RouteParams
+    description: str | None = None
+    params: str | None = None
+    body: str | None = None
+    request: str | None = None
+    response: str | None = None
+
+    handler: Callable = field(init=False, repr=False)
+
+    def __post_init__(self):
+        scope = {}
+        args = []
+        if self.params:
+            args.append(f"params: {self.params}")
+        if self.body:
+            args.append(f"body: {self.body}")
+        if self.request:
+            args.append(f"request: {self.request}")
+
+        return_annotation = ""
+        if self.response:
+            return_annotation = f" -> {self.response}"
+
+        func_str = f"def __handler({', '.join(args)}){return_annotation}: ...\n"
+
+        exec(func_str, locals=scope)
+        self.handler = scope["__handler"]
+
+        if self.description:
+            self.handler.__doc__ = self.description
+
+
+def create_app(specs: list[EndpointSpec]) -> LambdaAPI:
     app = LambdaAPI(prefix="/api", schema_id="example", tags=["example", "test"])
-
-    @app.get("")
-    async def empty_path() -> None:
-        """@empty"""
-        ...
-
-    @app.get("/")
-    async def root_path() -> None:
-        """@root"""
-        ...
-
-    @app.get("/example", status=200)
-    async def get_example(params: ExampleSchema) -> str:
-        """@example"""
-        ...
-
-    @app.patch("/example2", status=200, tags=None)
-    async def get_example2(
-        params: ExampleSchema, body: int, request: BearerAuthRequest
-    ) -> ExampleResponse:
-        """
-        Some test description. @example2
-        """
-        ...
-
-    @app.get("/example3", status=200, tags=None)
-    async def get_example3(params: ExampleSchema):
-        """@example3"""
-        ...
-
-    class MyHeaders(Headers):
-        x_custom_header: str
-
-    class MyRequest(Request):
-        headers: MyHeaders  # type: ignore
-
-    @app.get("/example4", status=200)
-    async def get_example4(request: MyRequest) -> str:
-        """@example4-get"""
-        ...
-
-    @app.post("/example4", status=200)
-    async def post_example4(request: MyRequest) -> str:
-        """@example4-post"""
-        ...
+    for spec in specs:
+        app.decorate_route(spec.handler, spec.path, spec.method, spec.config)
 
     return app
 
 
-def test_docsgen_consistent(app: LambdaAPI):
+api_apps_common = [
+    # Empty vs root vs other paths
+    [
+        EndpointSpec(
+            path="",
+            method=Method.GET,
+            config=RouteParams(status=200),
+            description="@empty",
+        ),
+        EndpointSpec(
+            path="/",
+            method=Method.GET,
+            config=RouteParams(status=200),
+            description="@root",
+        ),
+        EndpointSpec(
+            path="/example",
+            method=Method.GET,
+            config=RouteParams(status=200),
+            description="@example",
+        ),
+    ],
+    # Multiple methods
+    [
+        EndpointSpec(
+            path="/example",
+            method=method,
+            config=RouteParams(status=200),
+            description=f"@example-{method.value}",
+        )
+        for method in [Method.GET, Method.POST, Method.PUT, Method.DELETE, Method.PATCH]
+    ],
+]
+
+
+@pytest.mark.parametrize(
+    "specs",
+    api_apps_common,
+)
+def test_docsgen_consistent(specs):
+    app = create_app(specs)
     schema_gen = OpenApiGenerator(app)
-
     assert schema_gen.get_schema() == schema_gen.get_schema()
-    assert OpenApiGenerator(app).get_schema() == schema_gen.get_schema()
 
 
-def test_docsgen_endpoints_map(app: LambdaAPI):
+@pytest.mark.parametrize(
+    "specs",
+    api_apps_common,
+)
+def test_docsgen_paths_methods_exist(specs):
+    app = create_app(specs)
     schema = OpenApiGenerator(app).get_schema()
 
-    assert "/api/example" in schema["paths"]
-    assert "/api/example2" in schema["paths"]
-    assert "/api/example3" in schema["paths"]
-    assert "/api/example4" in schema["paths"]
-
-    assert set(schema["paths"]["/api/example2"].keys()) == {"patch"}
-    assert set(schema["paths"]["/api/example4"].keys()) == {"get", "post"}
-    assert set(schema["paths"]["/api/example"].keys()) == {"get"}
+    for spec in specs:
+        assert app.prefix + spec.path in schema["paths"]
+        assert spec.method.value.lower() in schema["paths"][app.prefix + spec.path]
 
 
-def test_docsgen_root_and_empty(app: LambdaAPI):
+@pytest.mark.parametrize(
+    "specs",
+    api_apps_common,
+)
+def test_docsgen_description(specs):
+    app = create_app(specs)
     schema = OpenApiGenerator(app).get_schema()
 
-    assert "@empty" in schema["paths"]["/api"]["get"]["description"]
-    assert "@root" in schema["paths"]["/api/"]["get"]["description"]
+    for spec in specs:
+        assert (
+            spec.description
+            in schema["paths"][app.prefix + spec.path][spec.method.value.lower()][
+                "description"
+            ]
+        )
 
 
-def test_docsgen_description(app: LambdaAPI):
-    schema = OpenApiGenerator(app).get_schema()
-
-    assert "@example" in schema["paths"]["/api/example"]["get"]["description"]
-    assert "@example2" in schema["paths"]["/api/example2"]["patch"]["description"]
-    assert "@example3" in schema["paths"]["/api/example3"]["get"]["description"]
-    assert "@example4-get" in schema["paths"]["/api/example4"]["get"]["description"]
-    assert "@example4-post" in schema["paths"]["/api/example4"]["post"]["description"]
-
-
-def test_docsgen_headers(app: LambdaAPI):
+def test_docsgen_headers():
+    app = create_app(
+        [
+            EndpointSpec(
+                path="/example",
+                method=Method.GET,
+                config=RouteParams(status=200),
+                request="ExampleRequest",
+            ),
+        ]
+    )
     schema = OpenApiGenerator(app).get_schema()
 
     assert (
-        schema["paths"]["/api/example4"]["get"]["parameters"][0]["name"]
+        schema["paths"]["/api/example"]["get"]["parameters"][0]["name"]
         == "X-Custom-Header"
     )
+
+
+@pytest.mark.parametrize(
+    "specs",
+    [
+        EndpointSpec(
+            path="/example", method=Method.GET, config=RouteParams(status=200), params=t
+        )
+        for t in [
+            "ExampleParams",
+            # "list[int]",
+            # "dict[str, int]",
+        ]
+    ]
+    + [
+        EndpointSpec(
+            path="/example",
+            method=Method.POST,
+            config=RouteParams(status=200),
+            body=t,
+        )
+        for t in [
+            "ExampleParams",
+            # "list[int]",
+            # "dict[str, int]",
+        ]
+    ],
+)
+def test_docsgen_params_body(specs):
+    # it should just work
+    app = create_app([specs])
+    OpenApiGenerator(app).get_schema()

@@ -70,11 +70,16 @@ def arbitrary_type_to_pydantic(type_):
     Convert an arbitrary type to a Pydantic model type.
     Args:
         type_: The type to convert, can be a Pydantic model class or a type hint.
+    Returns:
+        tuple[type, bool]: The converted type and a boolean indicating if the type is a RootModel.
     """
+    is_root = False
+
     if type_ is not _empty and type_ is not None:
         if not isinstance(type_, type) or not issubclass(type_, BaseModel):
             type_ = RootModel[type_]
+            is_root = True
     else:
         type_ = None
 
-    return type_
+    return type_, is_root
