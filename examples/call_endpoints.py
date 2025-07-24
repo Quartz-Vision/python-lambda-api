@@ -3,7 +3,7 @@ import asyncio
 from pydantic import BaseModel
 
 from lambda_api.adapters import AWSAdapter
-from lambda_api.core import LambdaAPI
+from lambda_api.app import LambdaAPI
 from lambda_api.schema import Headers, Request
 
 

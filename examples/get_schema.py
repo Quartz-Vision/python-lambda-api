@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from lambda_api.core import LambdaAPI
+from lambda_api.app import LambdaAPI
 from lambda_api.docsgen import OpenApiGenerator
 from lambda_api.schema import BearerAuthRequest, Headers, Request
 from lambda_api.utils import json_dumps
