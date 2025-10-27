@@ -170,24 +170,9 @@ class LambdaAPI(AbstractRouter):
                     status=200, body=None, headers=self.common_response_headers
                 )
             case (_, _) if method in endpoint:
-                try:
-                    response = await self.run_endpoint_handler(
-                        endpoint[method], request
-                    )
-                except APIError as e:
-                    response = Response(status=e._status, body={"error": str(e)})
-                except ValidationError as e:
-                    response = Response(
-                        status=400, body=f'{{"error": {e.json()}}}', raw=True
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Unhandled exception.\nREQUEST:\n{request}\nERROR:",
-                        exc_info=e,
-                    )
-                    response = Response(
-                        status=500, body={"error": "Internal Server Error"}
-                    )
+                response = await self.run_endpoint_handler(
+                    endpoint[method], request
+                )
             case _:
                 response = Response(status=405, body={"error": "Method Not Allowed"})
 
@@ -199,18 +184,37 @@ class LambdaAPI(AbstractRouter):
         template = self.get_invoke_template(route)
 
         # this ValidationError is raised when the request data is invalid
-        # we can return it to the client
+        # so it's safe to return it to the client
         try:
             args = template.prepare_method_args(request)
         except ValidationError as e:
-            return Response(status=400, body={"error": e.json()})
+            return Response(status=400, body=f'{{"error": {e.json()}}}', raw=True)
 
-        result = await route.handler(**args)
-
-        # this ValidationError is raised when the response data is invalid
-        # we can log it and return a generic error to the client to avoid leaking
         try:
-            return template.prepare_response(result)
+            result = await route.handler(**args)
+        except APIError as e:
+            return Response(status=e._status, body={"error": str(e)})
+        except ValidationError as e:
+            # this ValidationError is most likely intended to be raised by the endpoint
+            # so we can return it to the client
+            return Response(
+                status=400, body=f'{{"error": {e.json()}}}', raw=True
+            )
+        except Exception as e:
+            # we know nothing about this error, log it and return a generic message
+            logger.error(
+                f"Unhandled exception.\nREQUEST:\n{request}\nERROR:",
+                exc_info=e,
+            )
+            return Response(
+                status=500, body={"error": "Internal Server Error"}
+            )
+
+        # This ValidationError is raised when the response data is invalid.
+        # This is most likely a bug in the endpoint implementation and
+        # should not be exposed to the client
+        try:
+           return template.prepare_response(result)
         except ValidationError as e:
             logger.error(
                 f"Response data is invalid.\nREQUEST:\n{request}\nERROR:",
