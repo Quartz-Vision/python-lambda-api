@@ -27,7 +27,7 @@ async def get_example(params: ExampleSchema, body: ExampleBody) -> str:
     return "Hello, " + params.name + " and " + body.name2
 
 
-@app.get("/example2", status=200)
+@app.get("/example2/", status=200)
 async def get_example2(params: ExampleSchema) -> ExampleResponse:
     return ExampleResponse(message="Hello, " + params.name)
 
@@ -71,22 +71,22 @@ async def main():
 
     print("\nEXAMPLE 2")
     print(
-        "OPTIONS /example2?name=World:\n",
+        "OPTIONS /example2/?name=World:\n",
         await lambda_adapter.run(
             {
                 "httpMethod": "OPTIONS",
-                "pathParameters": {"proxy": "/example2"},
+                "pathParameters": {"proxy": "/example2/"},
                 "queryStringParameters": {"name": "World"},
             },
             None,
         ),
     )
     print(
-        "GET /example2?name=World:\n",
+        "GET /example2/?name=World:\n",
         await lambda_adapter.run(
             {
                 "httpMethod": "GET",
-                "pathParameters": {"proxy": "/example2"},
+                "pathParameters": {"proxy": "/example2/"},
                 "queryStringParameters": {"name": "World"},
             },
             None,

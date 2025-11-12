@@ -40,7 +40,7 @@ class AWSAdapter(BaseAdapter):
         Parse the AWS Lambda event into a request dictionary.
         """
         original_path = event.get("pathParameters", {}).get("proxy", "")
-        path = "/" + original_path.strip("/") if original_path else ""
+        path = "/" + original_path.lstrip("/") if original_path else ""
         method = Method(event["httpMethod"])
 
         singular_params = event.get("queryStringParameters") or {}

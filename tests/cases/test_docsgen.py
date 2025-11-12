@@ -95,6 +95,12 @@ api_apps_common = [
             config=RouteParams(status=200),
             description="@example",
         ),
+        EndpointSpec(
+            path="/example/",
+            method=Method.GET,
+            config=RouteParams(status=200),
+            description="@example_trail",
+        ),
     ],
     # Multiple methods
     [

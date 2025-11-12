@@ -66,21 +66,34 @@ async def test_request_response_general_parsing(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mock_request",
+    [
+        MockRequest(
+            path="/",
+            method=Method.GET,
+            params={"name": "test name"},
+            body={},
+            headers={},
+        ),
+        MockRequest(
+            path="",
+            method=Method.GET,
+            params={"name": "test name"},
+            body={},
+            headers={},
+        ),
+        MockRequest(
+            path="/test/",
+            method=Method.GET,
+            params={"name": "test name"},
+            body={},
+            headers={},
+        ),
+    ],
+)
 async def test_request_root_and_empty_paths(
-    mock_app: LambdaAPI, mock_adapter: AWSAdapter
+    mock_app: LambdaAPI, mock_adapter: AWSAdapter, mock_request: MockRequest
 ):
-    root_request = MockRequest(
-        path="/", method=Method.GET, params={"name": "test name"}, body={}, headers={}
-    )
-    empty_path_request = MockRequest(
-        path="", method=Method.GET, params={"name": "test name"}, body={}, headers={}
-    )
-
-    adapter_parsed_root = mock_adapter.parse_request(root_request.raw)
-    adapter_parsed_empty_path = mock_adapter.parse_request(empty_path_request.raw)
-
-    assert adapter_parsed_root == root_request.parsed
-    assert adapter_parsed_empty_path == empty_path_request.parsed
-
-    assert adapter_parsed_root.path == "/"
-    assert adapter_parsed_empty_path.path == ""
+    mock_request_parsed = mock_adapter.parse_request(mock_request.raw)
+    assert mock_request_parsed == mock_request.parsed
