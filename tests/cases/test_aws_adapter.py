@@ -26,7 +26,9 @@ class MockRequest:
     def __init__(
         self, path: str, method: Method, params: dict, body: dict, headers: dict
     ):
+        path = path or "/"
         self.raw = {
+            "resource": "/api/{proxy+}",
             "httpMethod": method.value,
             "pathParameters": {"proxy": path},
             "queryStringParameters": params,
